@@ -192,10 +192,44 @@ body::-webkit-scrollbar {
     from { background-position: 0 0, 0 0, 0 0; }
     to   { background-position: 0 6px, 0 12px, 0 0; }
 }
+
+#loading-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    z-index: 999999;
+    background: rgba(2, 3, 8, 0.4);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.8s ease, visibility 0.8s ease;
+    pointer-events: all;
+}
+#loading-overlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
 </style>
 </head>
 <body>
-
+  <div id="loading-overlay">
+    <svg style="position: absolute; width: 0; height: 0;">
+        <filter id="loading-distort">
+            <feTurbulence type="fractalNoise" baseFrequency="0.02 0.4" numOctaves="2" result="noise" />
+            <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.5" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+    </svg>
+    <div style="position: relative; font-family: 'Saira Condensed', monospace; font-size: clamp(20px, 4vw, 40px); letter-spacing: 4px; text-align: center;">
+        <div style="position: absolute; top: 0; left: 0; width: 100%; color: rgba(0, 0, 0, 0.7); z-index: 2; transform: translate(3px, 3px); filter: blur(2px);">Loading...</div>
+        <div style="position: absolute; top: 0; left: 0; width: 100%; color: rgba(255, 30, 30, 0.8); z-index: 3; transform: translate(-3px, 0); filter: blur(2.5px);">Loading...</div>
+        <div style="position: absolute; top: 0; left: 0; width: 100%; color: rgba(30, 255, 255, 0.8); z-index: 4; transform: translate(3px, 0); filter: blur(2.5px);">Loading...</div>
+        <div style="position: relative; z-index: 5; background-image: repeating-linear-gradient(to bottom, #ffffff 0px, #ffffff 3px, transparent 3px, transparent 4px); -webkit-background-clip: text; color: transparent; filter: url(#loading-distort) drop-shadow(0 0 4px rgba(255,255,255,0.6)) drop-shadow(0 0 12px rgba(255,0,0,0.3));">Loading...</div>
+    </div>
+  </div>
   <div id="scaler" style="transform: translate(0px, -80.75px) scale(1.32917);">
     <div id="stage">
       <div id="haze-layer"></div>
@@ -232,7 +266,7 @@ window.scrollTo(0, 0);
     <svg style="position: absolute; width: 0; height: 0;">
         <filter id="crt-distort">
             <feTurbulence type="fractalNoise" baseFrequency="0.02 0.4" numOctaves="2" result="noise" />
-            <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G" />
+            <feDisplacementMap in="SourceGraphic" in2="noise" scale="5" xChannelSelector="R" yChannelSelector="G" />
         </filter>
     </svg>
     <div id="sync-container" style="position: relative; width: 85%; max-width: 85%; text-align: center; line-height: 1.5; letter-spacing: 2px; word-wrap: break-word; word-break: break-all;">
@@ -266,5 +300,13 @@ window.scrollTo(0, 0);
     document.querySelectorAll('.sync-text').forEach(el => {
         el.innerHTML = parsedHTML;
     });
+</script>
+<script>
+window.addEventListener('load', function() {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+    }
+});
 </script>
 </body></html>
