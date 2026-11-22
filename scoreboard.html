@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>成绩分析报告生成器</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+       background:#f4f6fb;color:#1f2937}
+  header{background:linear-gradient(135deg,#3b6ef6,#7c3aed);color:#fff;padding:30px 22px}
+  header h1{margin:0 0 8px;font-size:22px}
+  header p{margin:0;opacity:.9;font-size:13px}
+  main{max-width:1180px;margin:0 auto;padding:22px 16px 80px}
+
+  .panel{background:#fff;border-radius:14px;padding:18px;margin-bottom:20px;
+         box-shadow:0 2px 12px rgba(30,50,90,.07)}
+  .panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:12px;flex-wrap:wrap}
+  .panel-head h2{margin:0;font-size:16px}
+  .btn-file,.btn-primary{border:0;border-radius:9px;padding:10px 18px;font-size:14px;cursor:pointer;
+        font-weight:600;transition:.15s}
+  .btn-file{background:#eef3ff;color:#2b53c7}
+  .btn-file:hover{background:#e0e9ff}
+  .btn-primary{background:#3b6ef6;color:#fff}
+  .btn-primary:hover{background:#2f5ce0}
+  .empty{color:#9aa5b5;font-size:13px;text-align:center;padding:26px;margin:0}
+  .file-list{display:flex;flex-direction:column;gap:16px}
+  .card{border:1px solid #e3e8f2;border-radius:12px;padding:14px;background:#fcfdff}
+  .card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px}
+  .fname{font-weight:600;font-size:14px;color:#26334d;word-break:break-all}
+  .card-actions{display:flex;gap:8px;flex-shrink:0}
+  .btn-copy{border:1px solid #d7dfec;background:#fff;color:#2b53c7;border-radius:7px;
+            padding:5px 12px;font-size:12px;cursor:pointer;font-weight:600}
+  .btn-copy:hover{background:#eef3ff}
+  .btn-rm{border:1px solid #ffd0d0;background:#fff5f5;color:#e04242;border-radius:7px;
+          padding:5px 12px;font-size:12px;cursor:pointer}
+  .btn-rm:hover{background:#ffe8e8}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:10px}
+  .field{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#5b6b85}
+  .field input,.field select{width:100%;padding:7px 9px;border:1px solid #d7dfec;border-radius:8px;
+        font-size:13px;background:#fff;color:#1f2937;outline:none;font-family:inherit;}
+  .field input.col-input{text-transform:uppercase}
+  .field input:focus,.field select:focus{border-color:#3b6ef6;box-shadow:0 0 0 3px rgba(59,110,246,.12)}
+  .field input.error{border-color:#e04242;background:#fff5f5}
+  .preview{margin-top:8px;overflow:auto;border-radius:8px}
+  .preview table{border-collapse:collapse;width:100%;font-size:12px;background:#fff}
+  .preview th,.preview td{border:1px solid #e6ebf3;padding:5px 8px;text-align:center;white-space:nowrap}
+  .preview th{background:#f2f5fb;color:#5b6b85;font-weight:600}
+  .hint{font-size:12px;color:#8a97ab;margin:0 0 10px;line-height:1.7}
+  .errline{font-size:12px;color:#e04242;margin:6px 0 0}
+  #result a{display:inline-block;margin-top:10px;font-size:13px;color:#3b6ef6}
+
+  /* 自定义高斯模糊弹窗 */
+  .modal-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(8px); /* 背景高斯模糊 */
+    -webkit-backdrop-filter: blur(8px);
+    display: none; align-items: center; justify-content: center; z-index: 9999;
+    opacity: 0; transition: opacity 0.2s ease;
+  }
+  .modal-overlay.show { opacity: 1; }
+  .modal-box {
+    background: #fff; border-radius: 16px; padding: 24px; width: 340px;
+    box-shadow: 0 20px 40px -10px rgba(0,0,0,0.2);
+    transform: translateY(10px); transition: transform 0.2s ease;
+  }
+  .modal-overlay.show .modal-box { transform: translateY(0); }
+  .modal-title { font-weight: 600; font-size: 16px; margin-bottom: 12px; color: #1f2937; }
+  .modal-msg { font-size: 14px; color: #4b5563; margin-bottom: 24px; line-height: 1.6; white-space: pre-wrap; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+  .modal-actions button { padding: 8px 16px; font-size: 13px; border-radius: 8px; cursor: pointer; font-weight: 600; border: 0;}
+  .btn-modal-cancel { background: #f1f5f9; color: #475569; }
+  .btn-modal-cancel:hover { background: #e2e8f0; }
+  .btn-modal-ok { background: #3b6ef6; color: #fff; }
+  .btn-modal-ok:hover { background: #2f5ce0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>成绩分析报告生成器</h1>
+  <p>通过Excel成绩表生成可交互的成绩分析HTML</p>
+</header>
+
+<main>
+  <section class="panel">
+    <div class="panel-head">
+      <h2>1. 选择 Excel 文件（可多选）</h2>
+      <label class="btn-file" style="position:relative;overflow:hidden;display:inline-block;cursor:pointer;">
+选择文件
+<input type="file" id="fileInput" multiple accept=".xlsx,.xls,.csv"
+       style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:200px;">
+</label>
+    </div>
+    <div id="fileList" class="file-list"><p class="empty">还没有添加文件</p></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>2. 生成报告</h2>
+      <button id="genBtn" class="btn-primary">生成 HTML 报告</button>
+    </div>
+    <p class="hint">生成的报告包含：学生选择器、各科分数 / 总分 / 年级排名 / 班级排名的明细表（带涨跌对比），以及可切换指标（各科得分率、总分、排名）的趋势折线图。缺考科目按 0 分计入总分。</p>
+    <div id="result"></div>
+  </section>
+</main>
+
+<!-- 自定义弹窗 HTML -->
+<div id="modalOverlay" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-title" id="modalTitle">哎哟我去</div>
+    <div class="modal-msg" id="modalMsg"></div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" id="modalCancel">取消</button>
+      <button class="btn-modal-ok" id="modalConfirm">确定!</button>
+    </div>
+  </div>
+</div>
+
+<script type="text/template" id="viewerTemplate">
+const exams = DATA.exams;
+const subjects = DATA.subjects;
+
+const studentMap = new Map();
+exams.forEach(function (e, ei) {
+  e.students.forEach(function (s) {
+    const key = (s.idKey && String(s.idKey).trim()) ? ('id:' + s.idKey) : ('name:' + s.name);
+    let rec = studentMap.get(key);
+    if (!rec) { rec = { key: key, name: s.name, cls: s.cls, recs: {} }; studentMap.set(key, rec); }
+    if (!rec.cls && s.cls) rec.cls = s.cls;
+    rec.recs[ei] = s;
+  });
+});
+const students = Array.from(studentMap.values()).sort(function (a, b) {
+  return a.name.localeCompare(b.name, 'zh-Hans-CN');
+});
+
+const metrics = [];
+subjects.forEach(function (s) { 
+  metrics.push({ key: s.key, label: s.label, rank: false, type: 'score' });
+  metrics.push({ key: s.key + '_rate', label: s.label + '得分率', rank: false, type: 'rate' });
+});
+metrics.push({ key: 'total', label: '总分', rank: false, type: 'score' });
+metrics.push({ key: 'gradeRank', label: '年级排名', rank: true, type: 'rank' });
+metrics.push({ key: 'classRank', label: '班级排名', rank: true, type: 'rank' });
+
+const studentSel = document.getElementById('studentSel');
+const metricSel = document.getElementById('metricSel');
+students.forEach(function (s) {
+  const o = document.createElement('option');
+  o.value = s.key;
+  o.textContent = s.name + (s.cls ? '（' + s.cls + '）' : '');
+  studentSel.appendChild(o);
+});
+metrics.forEach(function (m) {
+  const o = document.createElement('option');
+  o.value = m.key; o.textContent = m.label;
+  metricSel.appendChild(o);
+});
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function getVal(rec, m, ei) {
+  if (!rec) return null;
+  if (m.key === 'total') return rec.total;
+  if (m.key === 'gradeRank') return rec.gradeRank;
+  if (m.key === 'classRank') return rec.classRank;
+  
+  if (m.type === 'rate') {
+    const subKey = m.key.replace('_rate', '');
+    const v = rec.sc[subKey];
+    if (v == null) return null;
+    const e = exams[ei];
+    const full = (e.full && e.full[subKey] > 0) ? e.full[subKey] : 100;
+    return Math.round((v / full) * 10000) / 100;
+  }
+  const v = rec.sc[m.key];
+  return (v === undefined || v === null) ? null : v;
+}
+
+function cell(v, diff, lowerBetter, cls, isRate, isOver) {
+  if (v === null || v === undefined) return '<span class="muted">—</span>';
+  let h = '<span class="v ' + (cls || '') + (isOver ? ' over' : '') + '">' + v + (isRate ? '%' : '') + '</span>';
+  if (diff !== null && diff !== 0 && isFinite(diff)) {
+    const good = lowerBetter ? diff < 0 : diff > 0;
+    h += '<span class="chg ' + (good ? 'up' : 'down') + '">' +
+         (diff > 0 ? '+' : '-') + Math.abs(Math.round(diff * 100) / 100) + (isRate ? '%' : '') + '</span>';
+  }
+  return h;
+}
+
+function renderTable(st) {
+  let h = '<p class="hint" style="margin:0 0 10px;color:#64748b">注：涨跌对比为与上一次参加考试的差值。</p>';
+  h += '<table><thead><tr><th>考试</th>';
+  subjects.forEach(function (s) { h += '<th>' + esc(s.label) + '</th>'; });
+  h += '<th>总分</th><th>年级排名</th><th>班级排名</th></tr></thead><tbody>';
+
+  let prev = null;
+  exams.forEach(function (e, ei) {
+    const s = st.recs[ei];
+    h += '<tr><td class="exam-name">' + esc(e.name) + '</td>';
+    if (!s) {
+      h += '<td colspan="' + (subjects.length + 3) + '" class="na">未参加</td></tr>';
+      return;
+    }
+    subjects.forEach(function (sd) {
+      const v = s.sc[sd.key];
+      const pv = (prev && prev.sc[sd.key] != null && v != null) ? prev.sc[sd.key] : null;
+      const diff = (v != null && pv != null) ? (v - pv) : null;
+      const full = (e.full && e.full[sd.key] > 0) ? e.full[sd.key] : 100;
+      const isOver = v != null && full > 0 && v > full;
+      h += '<td>' + cell(v, diff, false, '', false, isOver) + '</td>';
+    });
+    
+    const diffT = (prev && prev.total != null && s.total != null) ? (s.total - prev.total) : null;
+    const diffG = (prev && prev.gradeRank != null && s.gradeRank != null) ? (s.gradeRank - prev.gradeRank) : null;
+    const diffC = (prev && prev.classRank != null && s.classRank != null) ? (s.classRank - prev.classRank) : null;
+
+    h += '<td>' + cell(s.total, diffT, false, 'strong') + '</td>';
+    h += '<td>' + cell(s.gradeRank, diffG, true) + '</td>';
+    h += '<td>' + cell(s.classRank, diffC, true) + '</td>';
+    h += '</tr>';
+    prev = s;
+  });
+  h += '</tbody></table>';
+  document.getElementById('tableWrap').innerHTML = h;
+}
+
+function svgChart(pts, m) {
+  const W = 820, H = 420, PL = 72, PR = 40, PT = 34, PB = 120;
+  const pw = W - PL - PR, ph = H - PT - PB;
+  const vals = pts.map(function (p) { return p.v; });
+  let mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals);
+  if (mn === mx) { mn -= 1; mx += 1; }
+  
+  const pad = (mx - mn) * 0.2;
+  let dmin = mn - pad, dmax = mx + pad;
+  
+  if (m.rank) {
+    dmin = Math.floor(dmin);
+    dmax = Math.ceil(dmax);
+    if (dmax - dmin < 5) { dmax = dmin + 5; } 
+  } else if (m.type === 'rate') {
+    dmin = Math.max(0, dmin);
+    dmax = Math.min(100, dmax);
+  }
+
+  function X(i) { return pts.length === 1 ? PL + pw / 2 : PL + (i / (pts.length - 1)) * pw; }
+  function Y(v) {
+    const t = (v - dmin) / (dmax - dmin || 1);
+    return m.rank ? PT + t * ph : PT + (1 - t) * ph;
+  }
+  function fmt(v) {
+    if (m.rank) return String(Math.round(v));
+    if (m.type === 'rate') return v.toFixed(1) + '%';
+    return Math.abs(v - Math.round(v)) < 1e-9 ? String(Math.round(v)) : v.toFixed(1);
+  }
+
+  let s = '<svg viewBox="0 0 ' + W + ' ' + H + '" class="chart-svg" xmlns="http://www.w3.org/2000/svg">';
+  const T = 5;
+  for (let i = 0; i <= T; i++) {
+    const v = dmin + (dmax - dmin) * i / T;
+    const yy = Y(v).toFixed(1);
+    s += '<line x1="' + PL + '" y1="' + yy + '" x2="' + (PL + pw) + '" y2="' + yy +
+         '" stroke="#e5eaf2" stroke-width="1"/>';
+    s += '<text x="' + (PL - 12) + '" y="' + yy + '" dy="4" text-anchor="end" class="tick">' +
+         fmt(v) + '</text>';
+  }
+
+  let d = '';
+  pts.forEach(function (p, i) {
+    d += (i ? 'L' : 'M') + X(i).toFixed(1) + ',' + Y(p.v).toFixed(1) + ' ';
+  });
+  s += '<path d="' + d + '" fill="none" stroke="#3b6ef6" stroke-width="2.5" ' +
+       'stroke-linejoin="round" stroke-linecap="round"/>';
+
+  pts.forEach(function (p, i) {
+    const cx = X(i).toFixed(1), cy = Y(p.v).toFixed(1);
+    s += '<circle cx="' + cx + '" cy="' + cy + '" r="4.5" fill="#fff" stroke="#3b6ef6" stroke-width="2.5"/>';
+    s += '<text x="' + cx + '" y="' + (Y(p.v) - 14).toFixed(1) +
+         '" text-anchor="middle" class="pt-label">' + fmt(p.v) + '</text>';
+  });
+
+  pts.forEach(function (p, i) {
+    const lbl = p.label.length > 10 ? p.label.slice(0, 10) + '…' : p.label;
+    const cx = X(i).toFixed(1);
+    const cy = PT + ph + 24;
+    s += '<text x="' + cx + '" y="' + cy + '" text-anchor="end" ' +
+         'transform="rotate(28 ' + cx + ' ' + cy + ')" class="x-label">' + esc(lbl) + '</text>';
+  });
+
+  s += '<line x1="' + PL + '" y1="' + PT + '" x2="' + PL + '" y2="' + (PT + ph) + '" stroke="#cbd5e1"/>';
+  s += '<line x1="' + PL + '" y1="' + (PT + ph) + '" x2="' + (PL + pw) + '" y2="' + (PT + ph) + '" stroke="#cbd5e1"/>';
+  s += '</svg>';
+  return s;
+}
+
+function drawChart(st) {
+  const m = metrics.filter(function (x) { return x.key === metricSel.value; })[0];
+  const pts = [];
+  exams.forEach(function (e, ei) {
+    const s = st.recs[ei];
+    if (!s) return;
+    const v = getVal(s, m, ei);
+    if (v === null || v === undefined) return;
+    pts.push({ label: e.name, v: v });
+  });
+  const el = document.getElementById('chart');
+  if (!pts.length) { el.innerHTML = '<p class="muted">暂无数据</p>'; return; }
+  el.innerHTML = svgChart(pts, m);
+}
+
+function refresh() {
+  const st = studentMap.get(studentSel.value);
+  if (!st) return;
+  renderTable(st);
+  drawChart(st);
+}
+studentSel.onchange = refresh;
+metricSel.onchange = refresh;
+refresh();
+</script>
+
+<script>
+/* ================= 主程序 ================= */
+const SUBJ_DEFS = [
+  { key: 'chinese', label: '语文', full: 150 },
+  { key: 'math',    label: '数学', full: 150 },
+  { key: 'english', label: '英语', full: 150 },
+  { key: 'physics', label: '物理', full: 100 }
+];
+const COL_DEFS = [
+  ['id', '学号列号 (可选)'],
+  ['name', '姓名列号 (必填)'],
+  ['chinese', '语文列号'],
+  ['math', '数学列号'],
+  ['english', '英语列号'],
+  ['physics', '物理列号'],
+  ['cls', '班级 (可选)'],
+  ['gradeRank', '年级排名 (可选)'],
+  ['classRank', '班级排名 (可选)']
+];
+
+let files = [];
+let prevBlobUrl = null; 
+
+// 自定义高斯模糊弹窗逻辑（带队列防并发）
+let modalQueue = Promise.resolve();
+function showModal(msg, isConfirm) {
+  const run = () => new Promise((resolve) => {
+    const overlay = document.getElementById('modalOverlay');
+    document.getElementById('modalMsg').textContent = msg;
+    const cancelBtn = document.getElementById('modalCancel');
+    cancelBtn.style.display = isConfirm ? 'block' : 'none';
+    
+    // 修正入场动画：先设为 flex，下一帧再加 show
+    overlay.style.display = 'flex';
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => overlay.classList.add('show'));
+    });
+
+    const confirmBtn = document.getElementById('modalConfirm');
+    
+    const cleanup = () => {
+      overlay.classList.remove('show');
+      setTimeout(() => { overlay.style.display = 'none'; }, 200); // 等动画播完
+      confirmBtn.onclick = null;
+      cancelBtn.onclick = null;
+      overlay.onmousedown = null;
+      document.removeEventListener('keydown', handleEsc);
+    };
+
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') { cleanup(); resolve(false); }
+    };
+
+    confirmBtn.onclick = () => { cleanup(); resolve(true); };
+    cancelBtn.onclick = () => { cleanup(); resolve(false); };
+    
+    overlay.onmousedown = (e) => {
+      if (e.target === overlay && isConfirm) { cleanup(); resolve(false); }
+    };
+    document.addEventListener('keydown', handleEsc);
+  });
+
+  // 串行化：前一个弹窗结束前，后一个弹窗排队等待
+  const task = modalQueue.then(run);
+  modalQueue = task.catch(() => {});
+  return task;
+}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function letterToIndex(str) {
+  if (!str) return -1;
+  str = String(str).trim().toUpperCase();
+  if (/^\d+$/.test(str)) return parseInt(str, 10) - 1;
+  if (/^[A-Z]+$/.test(str)) {
+    let n = 0;
+    for (let i = 0; i < str.length; i++) {
+      n = n * 26 + (str.charCodeAt(i) - 64);
+    }
+    return n - 1;
+  }
+  return -1;
+}
+function indexToLetter(i) {
+  if (i < 0) return '';
+  let s = '', n = i + 1;
+  while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
+  return s;
+}
+
+function num(v) {
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'number') return isFinite(v) ? v : null;
+  const str = String(v).trim();
+  if (/^\d+(\.\d+)?$/.test(str)) return parseFloat(str);
+  if (/^[+-]?\d*\.?\d+[eE][+-]?\d+$/.test(str)) return parseFloat(str);
+  const s = str.replace(/[^\d.\-]/g, '');
+  if (s === '' || s === '-' || s === '.') return null;
+  const n = parseFloat(s);
+  return isFinite(n) ? n : null;
+}
+
+function normId(v) {
+  if (v === null || v === undefined) return '';
+  const s = String(v).trim();
+  if (/^\d+$/.test(s)) {
+    try { return String(BigInt(s)); } catch(e) { return s; }
+  }
+  return s;
+}
+
+function decodeText(buf) {
+  let text;
+  try { text = new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+  catch (e) {
+    try { text = new TextDecoder('gbk').decode(buf); }
+    catch (e2) { text = new TextDecoder('utf-8').decode(buf); }
+  }
+  return text.replace(/^\uFEFF/, '');
+}
+
+async function readWorkbook(file) {
+  const buf = await file.arrayBuffer();
+  if (/\.csv$/i.test(file.name)) {
+    const text = decodeText(buf);
+    return XLSX.read(text, { type: 'string' });
+  }
+  return XLSX.read(buf, { type: 'array' });
+}
+
+function readSheet(f) {
+  try {
+    const ws = f.wb.Sheets[f.cfg.sheet];
+    if (!ws) { f.err = '找不到工作表：' + f.cfg.sheet; return []; }
+    f.err = '';
+    return XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '', blankrows: true });
+  } catch (e) {
+    f.err = '读取失败：' + e.message;
+    return [];
+  }
+}
+
+function guessCols(aoa) {
+  let bestRowIndex = 0, maxScore = -1;
+  for (let i = 0; i < Math.min(aoa.length, 15); i++) {
+    const text = (aoa[i] || []).join('');
+    let score = 0;
+    if (text.includes('姓名') || text.includes('名字')) score += 3;
+    if (text.includes('学号') || text.includes('考号')) score += 2;
+    if (text.includes('语文')) score += 1;
+    if (text.includes('数学')) score += 1;
+    if (text.includes('英语')) score += 1;
+    if (score > maxScore) { maxScore = score; bestRowIndex = i; }
+  }
+  const row = aoa[bestRowIndex] || [];
+  
+  function find(kws, exclude) {
+    for (let i = 0; i < row.length; i++) {
+      const h = String(row[i] == null ? '' : row[i]).replace(/\s/g, '');
+      if (!h) continue;
+      if (exclude && exclude.some(k => h.includes(k))) continue;
+      for (let k = 0; k < kws.length; k++) { if (h.includes(kws[k])) return i; }
+    }
+    return -1;
+  }
+  
+  return {
+    headerRow: bestRowIndex,
+    cols: {
+      id: find(['学号', '考号', '编号', '学籍号'], ['班级', '班别']),
+      name: find(['姓名', '名字']),
+      chinese: find(['语文']),
+      math: find(['数学']),
+      english: find(['英语', '外语']),
+      physics: find(['物理']),
+      cls: find(['班级', '班别'], ['排名', '名次', '号']), 
+      gradeRank: find(['年级排名', '年排', '级排', '年级名次'], ['班级', '班排', '班名次']),
+      classRank: find(['班级排名', '班排', '班别排名', '班名次'])
+    }
+  };
+}
+
+function parseRows(f, limit) {
+  const c = f.cfg.cols || {};
+  const out = [];
+  const start = Math.max(0, (f.cfg.startRow || 1) - 1);
+  const rows = f.aoa.slice(start);
+  
+  if (c.name === undefined || c.name === null || c.name < 0) return out; 
+  
+  for (let ri = 0; ri < rows.length; ri++) {
+    const row = rows[ri] || [];
+    const name = String(row[c.name] == null ? '' : row[c.name]).trim();
+    if (!name) continue;
+    const sc = {};
+    let any = false;
+    for (let k = 0; k < SUBJ_DEFS.length; k++) {
+      const sd = SUBJ_DEFS[k];
+      const ci = c[sd.key];
+      const v = (ci >= 0) ? num(row[ci]) : null;
+      sc[sd.key] = v;
+      if (v !== null) any = true;
+    }
+    if (!any) continue;
+    let total = 0;
+    SUBJ_DEFS.forEach(function (sd) { total += (sc[sd.key] || 0); });
+    
+    let cls = (c.cls >= 0) ? String(row[c.cls] == null ? '' : row[c.cls]).trim() : '';
+    if (!cls) cls = f.cfg.className || '默认班级';
+
+    const rawId = (c.id >= 0) ? String(row[c.id] == null ? '' : row[c.id]).trim() : '';
+
+    out.push({
+      id: rawId,
+      idKey: normId(rawId),
+      name: name,
+      cls: cls,
+      sc: sc,
+      total: Math.round(total * 100) / 100,
+      gradeRank: (c.gradeRank >= 0) ? num(row[c.gradeRank]) : null,
+      classRank: (c.classRank >= 0) ? num(row[c.classRank]) : null
+    });
+    if (limit && out.length >= limit) break;
+  }
+  return out;
+}
+
+async function addFiles(fileList) {
+  if (!window.XLSX) { await showModal('Excel 解析库还没加载好，请刷新页面。', false); return; }
+  for (let i = 0; i < fileList.length; i++) {
+    const file = fileList[i];
+    
+    if (files.some(x => x.name === file.name)) {
+      const ok = await showModal('已经添加过同名文件 "' + file.name + '"，确定要再添加一次吗？\n(如果继续，报告中将出现两个同名考试)', true);
+      if (!ok) continue;
+    }
+
+    try {
+      const wb = await readWorkbook(file);
+      const f = {
+        name: file.name,
+        wb: wb,
+        aoa: [],
+        err: '',
+        cfg: {
+          sheet: wb.SheetNames[0],
+          startRow: 2,
+          examName: file.name.replace(/\.[^.]+$/, ''),
+          examDate: '',
+          className: '',
+          cols: {},
+          full: {}
+        }
+      };
+      SUBJ_DEFS.forEach(function (s) { f.cfg.full[s.key] = s.full; });
+      f.aoa = readSheet(f);
+      
+      const guessed = guessCols(f.aoa);
+      COL_DEFS.forEach(function (def) {
+        const k = def[0];
+        f.cfg.cols[k] = guessed.cols[k] !== undefined ? guessed.cols[k] : -1;
+      });
+      f.cfg.startRow = guessed.headerRow + 2; 
+      
+      files.push(f);
+    } catch (err) {
+      console.error(err);
+      await showModal('读取失败：' + file.name + '\n' + err.message, false);
+    }
+  }
+  rebuild();
+}
+
+function field(labelText, control) {
+  const l = document.createElement('label');
+  l.className = 'field';
+  const s = document.createElement('span');
+  s.textContent = labelText;
+  l.appendChild(s);
+  l.appendChild(control);
+  return l;
+}
+
+function renderPreview(f) {
+  const wrap = document.createElement('div');
+  wrap.className = 'preview';
+  const recs = parseRows(f, 5);
+  if (!recs.length) {
+    wrap.innerHTML = '<p class="hint" style="margin:6px 0">⚠️ 暂无数据，请确认填写正确。</p>';
+    return wrap;
+  }
+  let h = '<table><thead><tr><th>学号</th><th>姓名</th><th>班级</th>';
+  SUBJ_DEFS.forEach(function (s) { h += '<th>' + s.label + '</th>'; });
+  h += '<th>总分</th><th>年排</th><th>班排</th></tr></thead><tbody>';
+  recs.forEach(function (r) {
+    h += '<tr><td>' + esc(r.id) + '</td><td>' + esc(r.name) + '</td><td>' + esc(r.cls) + '</td>';
+    SUBJ_DEFS.forEach(function (s) {
+      let valStr = (r.sc[s.key] == null ? '-' : r.sc[s.key]);
+      if (r.sc[s.key] != null && f.cfg.full[s.key] > 0 && r.sc[s.key] > f.cfg.full[s.key]) {
+         valStr = '<span style="color:#e04242;font-weight:bold">' + valStr + '</span>';
+      }
+      h += '<td>' + valStr + '</td>';
+    });
+    h += '<td>' + r.total + '</td>';
+    h += '<td>' + (r.gradeRank == null ? '自动' : r.gradeRank) + '</td>';
+    h += '<td>' + (r.classRank == null ? '自动' : r.classRank) + '</td>';
+    h += '</tr>';
+  });
+  h += '</tbody></table>';
+  wrap.innerHTML = h;
+  return wrap;
+}
+
+function debounce(fn, wait) {
+  let t;
+  return function(...args) {
+    clearTimeout(t);
+    t = setTimeout(() => fn.apply(this, args), wait);
+  };
+}
+
+function createCard(f, idx) {
+  const card = document.createElement('div');
+  card.className = 'card';
+
+  const head = document.createElement('div');
+  head.className = 'card-head';
+  const t = document.createElement('div');
+  t.className = 'fname';
+  t.textContent = f.name;
+  head.appendChild(t);
+  
+  const actions = document.createElement('div');
+  actions.className = 'card-actions';
+
+  if (idx > 0) {
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'btn-copy';
+    copyBtn.textContent = '同上配置';
+    copyBtn.title = '复制上一个文件的起始行、满分及列设置';
+    copyBtn.onclick = function () {
+      const prev = files[idx - 1];
+      f.cfg.startRow = prev.cfg.startRow;
+      f.cfg.cols = JSON.parse(JSON.stringify(prev.cfg.cols));
+      f.cfg.full = JSON.parse(JSON.stringify(prev.cfg.full));
+      const newCard = createCard(f, idx);
+      card.parentNode.replaceChild(newCard, card);
+    };
+    actions.appendChild(copyBtn);
+  }
+
+  const rm = document.createElement('button');
+  rm.className = 'btn-rm';
+  rm.textContent = '移除';
+  rm.onclick = async function () { 
+    const ok = await showModal('确定要移除文件 "' + f.name + '" 吗？', true);
+    if (ok) {
+      files.splice(idx, 1);
+      rebuild();
+    }
+  };
+  actions.appendChild(rm);
+  head.appendChild(actions);
+  card.appendChild(head);
+
+  function refreshPreview() {
+    const old = card.querySelector('.preview');
+    const np = renderPreview(f);
+    if (old) card.replaceChild(np, old);
+    else card.appendChild(np);
+  }
+  const debouncedPreview = debounce(refreshPreview, 150);
+
+  const g1 = document.createElement('div');
+  g1.className = 'grid';
+
+  const wsSel = document.createElement('select');
+  f.wb.SheetNames.forEach(function (n) { wsSel.appendChild(new Option(n, n)); });
+  wsSel.value = f.cfg.sheet;
+  wsSel.onchange = function () {
+    f.cfg.sheet = wsSel.value;
+    f.aoa = readSheet(f);
+    const g = guessCols(f.aoa);
+    COL_DEFS.forEach(d => { f.cfg.cols[d[0]] = g.cols[d[0]] ?? -1; });
+    f.cfg.startRow = g.headerRow + 2;
+    const newCard = createCard(f, idx);
+    card.parentNode.replaceChild(newCard, card);
+  };
+  g1.appendChild(field('工作表', wsSel));
+
+  const rowInp = document.createElement('input');
+  rowInp.type = 'number'; rowInp.min = '1'; rowInp.value = f.cfg.startRow;
+  rowInp.onchange = function () {
+    f.cfg.startRow = Math.max(1, parseInt(rowInp.value, 10) || 1);
+    refreshPreview();
+  };
+  g1.appendChild(field('数据起始行（填成绩数据开始的行号', rowInp));
+
+  const nameInp = document.createElement('input');
+  nameInp.type = 'text'; nameInp.value = f.cfg.examName;
+  nameInp.onchange = function () {
+    f.cfg.examName = nameInp.value.trim() || '未命名考试';
+  };
+  g1.appendChild(field('考试名称', nameInp));
+
+  const dateInp = document.createElement('input');
+  dateInp.type = 'text'; dateInp.value = f.cfg.examDate || '';
+  dateInp.placeholder = '如: 2026-09-01';
+  dateInp.onchange = function () {
+    const v = dateInp.value.trim();
+    if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+      dateInp.classList.add('error');
+      dateInp.title = '日期格式建议 YYYY-MM-DD';
+      dateInp.value = f.cfg.examDate || ''; // 回滚到上次合法值
+    } else {
+      dateInp.classList.remove('error');
+      dateInp.title = '';
+      f.cfg.examDate = v;
+    }
+  };
+  g1.appendChild(field('考试日期/排序', dateInp));
+
+  const clsInp = document.createElement('input');
+  clsInp.type = 'text';
+  clsInp.value = f.cfg.className || '';
+  clsInp.placeholder = '如: 初二12班';
+  clsInp.oninput = function () {
+    f.cfg.className = clsInp.value.trim();
+    debouncedPreview();
+  };
+  const clsField = field('统一班级名称', clsInp);
+  const clsHint = document.createElement('div');
+  clsHint.style.cssText = 'font-size:11px;color:#94a3b8;margin-top:2px';
+  clsHint.textContent = '喵喵喵';
+  clsField.appendChild(clsHint);
+  g1.appendChild(clsField);
+  card.appendChild(g1);
+
+  const g2 = document.createElement('div');
+  g2.className = 'grid';
+  
+  COL_DEFS.forEach(function (def) {
+    const key = def[0], label = def[1];
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'col-input';
+    inp.placeholder = '如: A';
+    inp.title = key === 'id' ? '学号请保持格式一致（如都用文本且补零）' : '';
+    inp.style.textAlign = 'center';
+    inp.style.fontWeight = 'bold';
+    inp.value = f.cfg.cols[key] >= 0 ? indexToLetter(f.cfg.cols[key]) : '';
+    
+    inp.oninput = function () {
+      const v = inp.value.trim();
+      if (!v) {
+        f.cfg.cols[key] = -1;
+        inp.classList.remove('error');
+        debouncedPreview();
+        return;
+      }
+      const index = letterToIndex(v);
+      if (index >= 0) {
+        f.cfg.cols[key] = index;
+        inp.classList.remove('error');
+        if (/^\d+$/.test(v)) inp.value = indexToLetter(index);
+        debouncedPreview();
+      } else {
+        inp.classList.add('error');
+      }
+    };
+    g2.appendChild(field(label + ' (字母)', inp));
+  });
+  card.appendChild(g2);
+
+  const g3 = document.createElement('div');
+  g3.className = 'grid';
+  SUBJ_DEFS.forEach(function (s) {
+    const inp = document.createElement('input');
+    inp.type = 'number'; inp.min = '1'; inp.step = '1';
+    inp.value = f.cfg.full[s.key];
+    inp.onchange = function () {
+      let val = parseFloat(inp.value);
+      if (isNaN(val) || val <= 0) { 
+        inp.classList.add('error');
+        inp.title = '满分必须大于0';
+        setTimeout(() => inp.classList.remove('error'), 1500);
+        val = f.cfg.full[s.key] > 0 ? f.cfg.full[s.key] : s.full; // 回滚到上次有效值
+        inp.value = val; 
+      } else {
+        inp.classList.remove('error');
+        inp.title = '';
+        f.cfg.full[s.key] = val;
+      }
+      debouncedPreview();
+    };
+    g3.appendChild(field(s.label + ' 满分', inp));
+  });
+  card.appendChild(g3);
+
+  if (f.err) {
+    const p = document.createElement('p');
+    p.className = 'errline';
+    p.textContent = '⚠️ ' + f.err;
+    card.appendChild(p);
+  }
+
+  card.appendChild(renderPreview(f));
+  return card;
+}
+
+function rebuild() {
+  const list = document.getElementById('fileList');
+  list.innerHTML = '';
+  if (!files.length) {
+    list.innerHTML = '<p class="empty">还没有添加文件</p>';
+    return;
+  }
+  files.forEach(function (f, i) { list.appendChild(createCard(f, i)); });
+}
+
+function assignRanks(list) {
+  const sorted = list.slice().sort(function (a, b) { return b.total - a.total; });
+  let lastTotal = null, lastRank = 0;
+  sorted.forEach(function (s, i) {
+    if (lastTotal !== null && Math.abs(s.total - lastTotal) < 1e-6) {
+      s._rank = lastRank;
+    } else {
+      s._rank = i + 1; lastRank = i + 1; lastTotal = s.total;
+    }
+  });
+  return sorted;
+}
+
+const REPORT_CSS = `
+*{box-sizing:border-box}
+body{margin:0;background:#f4f6fb;color:#1f2937;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+.app{max-width:1000px;margin:0 auto;padding:0 16px 60px}
+.rhead{background:linear-gradient(135deg,#3b6ef6,#7c3aed);color:#fff;margin:0 -16px 22px;padding:26px 22px;border-radius:0 0 18px 18px}
+.rhead h1{margin:0 0 6px;font-size:21px}
+.rhead .sub{font-size:13px;opacity:.9}
+.toolbar{display:flex;gap:18px;flex-wrap:wrap;align-items:center;background:#fff;border-radius:12px;padding:14px 18px;box-shadow:0 2px 12px rgba(30,50,90,.07);margin-bottom:20px}
+.toolbar label{font-size:13px;color:#5b6b85;display:flex;align-items:center;gap:8px}
+.toolbar select{padding:8px 12px;border:1px solid #d7dfec;border-radius:9px;font-size:14px;background:#fff;color:#1f2937;outline:none;font-family:inherit;min-width:150px}
+.toolbar select:focus{border-color:#3b6ef6;box-shadow:0 0 0 3px rgba(59,110,246,.12)}
+.card{background:#fff;border-radius:14px;padding:18px;margin-bottom:20px;box-shadow:0 2px 12px rgba(30,50,90,.07)}
+.card h2{margin:0 0 14px;font-size:16px}
+.hint{font-size:12px;color:#64748b;margin:0 0 10px}
+.table-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+th,td{border-bottom:1px solid #eef1f7;padding:10px 12px;text-align:center;white-space:nowrap}
+th{background:#f5f8fd;color:#5b6b85;font-weight:600;font-size:13px}
+tbody tr:hover{background:#fafcff}
+td.exam-name{text-align:left;font-weight:600;color:#26334d}
+td.na{color:#a8b2c1}
+.v{font-weight:600}
+.v.strong{color:#2b53c7;font-size:15px}
+.v.over{color:#e04242;}
+.muted{color:#b3bccb}
+.chg{display:inline-block;margin-left:6px;font-size:11px;padding:1px 5px;border-radius:20px}
+.chg.up{background:#e7f7ee;color:#12a05c}
+.chg.down{background:#fdeaea;color:#e04242}
+.chart{width:100%}
+.chart-svg{width:100%;height:auto;display:block}
+.chart-svg .tick{font-size:12px;fill:#94a3b8}
+.chart-svg .pt-label{font-size:12px;fill:#2b53c7;font-weight:600}
+.chart-svg .x-label{font-size:12px;fill:#64748b}
+`;
+
+function buildReport(exams, subjects, studentCount) {
+  const payload = JSON.stringify({ exams: exams, subjects: subjects }).replace(/</g, '\\u003c');
+  const viewer = document.getElementById('viewerTemplate').textContent;
+  let html = '';
+  html += '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n';
+  html += '<meta name="viewport" content="width=device-width,initial-scale=1">\n';
+  html += '<title>学生成绩分析报告</title>\n<style>' + REPORT_CSS + '</style>\n</head>\n<body>\n';
+  html += '<div class="app">\n';
+  html += '  <header class="rhead"><h1>学生成绩分析报告</h1>';
+  html += '<div class="sub">共 ' + exams.length + ' 次考试 · ' + studentCount + ' 名学生</div></header>\n';
+  html += '  <div class="toolbar">\n';
+  html += '    <label>学生 <select id="studentSel"></select></label>\n';
+  html += '    <label>图表指标 <select id="metricSel"></select></label>\n';
+  html += '  </div>\n';
+  html += '  <div class="card"><h2>成绩明细</h2><div id="tableWrap" class="table-wrap"></div></div>\n';
+  html += '  <div class="card"><h2>趋势图</h2><div id="chart" class="chart"></div></div>\n';
+  html += '</div>\n';
+  html += '<script>\nconst DATA = ' + payload + ';\n' + viewer + '\n<\/script>\n';
+  html += '</body>\n</html>';
+  return html;
+}
+
+async function generate() {
+  if (!files.length) { await showModal('请先添加 Excel 文件', false); return; }
+  let exams = [];
+  const skipped = [];
+  files.forEach(function (f) {
+    const recs = parseRows(f, 0);
+    if (!recs.length) { skipped.push(f.name); return; }
+    
+    const gradeComplete = recs.every(function(s){ return s.gradeRank !== null && s.gradeRank !== undefined; });
+    if (!gradeComplete) {
+      assignRanks(recs).forEach(function (s) { s.gradeRank = s._rank; });
+    }
+    
+    const byClass = {};
+    recs.forEach(function (s) {
+      const k = s.cls || '默认班级';
+      (byClass[k] || (byClass[k] = [])).push(s);
+    });
+    Object.keys(byClass).forEach(function (k) {
+      const group = byClass[k];
+      const classComplete = group.every(function(s){ return s.classRank !== null && s.classRank !== undefined; });
+      if (!classComplete) {
+        assignRanks(group).forEach(function (s) { s.classRank = s._rank; });
+      }
+    });
+
+    exams.push({
+      name: f.cfg.examName,
+      date: f.cfg.examDate || '',
+      full: f.cfg.full,
+      students: recs.map(function (s) {
+        return {
+          id: s.id, idKey: s.idKey, name: s.name, cls: s.cls, sc: s.sc,
+          total: s.total, gradeRank: s.gradeRank, classRank: s.classRank
+        };
+      })
+    });
+  });
+
+  if (!exams.length) {
+    await showModal('没有解析到有效数据，请检查各文件是否填了「姓名」列。' +
+          (skipped.length ? '\n\n未解析出数据的文件：\n' + skipped.join('\n') : ''), false);
+    return;
+  }
+
+  const dateTs = s => { 
+    if (!s) return Infinity;
+    const d = new Date(s); 
+    return isNaN(d.getTime()) ? Infinity : d.getTime(); 
+  };
+  
+  exams.sort(function(a, b) {
+    const ta = dateTs(a.date), tb = dateTs(b.date);
+    if (ta === tb) return 0;
+    return ta - tb;
+  });
+
+  const subjects = SUBJ_DEFS.filter(function (sd) {
+    return exams.some(function (e) {
+      return e.students.some(function (s) { return s.sc[sd.key] !== null && s.sc[sd.key] !== undefined; });
+    });
+  }).map(function (sd) { 
+    return { key: sd.key, label: sd.label }; 
+  });
+
+  const keySet = new Set();
+  exams.forEach(function (e) {
+    e.students.forEach(function (s) { keySet.add(s.idKey ? 'id:' + s.idKey : 'name:' + s.name); });
+  });
+
+  const html = buildReport(exams, subjects, keySet.size);
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  
+  if (prevBlobUrl) {
+    URL.revokeObjectURL(prevBlobUrl);
+  }
+  prevBlobUrl = URL.createObjectURL(blob);
+  const url = prevBlobUrl;
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '学生成绩分析报告.html';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  const res = document.getElementById('result');
+  res.innerHTML = '✅ 报告已生成并开始下载：<a href="' + url + '" target="_blank" rel="noopener">点此在新标签页打开预览</a>' +
+    (skipped.length ? '<p class="errline">以下文件未解析出数据，已跳过：' + esc(skipped.join('、')) + '</p>' : '');
+}
+
+document.getElementById('fileInput').addEventListener('change', function (e) {
+  const fl = Array.from(e.target.files || []);
+  e.target.value = '';
+  if (!fl.length) return;
+  addFiles(fl);
+});
+document.getElementById('genBtn').addEventListener('click', generate);
+rebuild();
+</script>
+</body>
+</html>
